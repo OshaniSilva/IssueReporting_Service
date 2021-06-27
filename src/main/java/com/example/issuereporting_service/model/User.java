@@ -2,6 +2,7 @@ package com.example.issuereporting_service.model;
 
 import javax.persistence.*;
 import java.io.Serializable;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -9,16 +10,16 @@ import java.util.Set;
 public class User implements Serializable {
 
     @Id
-//    @GeneratedValue(strategy = GenerationType.AUTO)
     @Column(name = "user_id")
     private String userId;
+//    @GeneratedValue(strategy = GenerationType.AUTO)
 
     @Column(name = "username")
     private String username;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY,
+    @OneToMany(mappedBy = "testUser", fetch = FetchType.LAZY,
             cascade = CascadeType.ALL)
-    private Set<Issue> issues;
+    private List<Issue> issues;
 
     public User() { }
 

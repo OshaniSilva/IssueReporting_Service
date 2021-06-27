@@ -10,30 +10,27 @@ import java.util.Objects;
 public class IssueHistory implements Serializable {
 
     @Id
-//    @Column (name = "id")
-    public IssueHistoryIds issueHistoryIds;
+    @GeneratedValue(strategy = GenerationType.TABLE)
+    @Column (name = "id")
+    long id;
+
+    @Column (name = "created_time")
+    private String createdTime;
 
     @Column (name = "issue_state")
     private String issueState;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "issue_id", nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "issue_id")
     public Issue issue;
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        IssueHistory that = (IssueHistory) o;
-        return Objects.equals(issueHistoryIds, that.issueHistoryIds) && Objects.equals(issueState, that.issueState);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(issueHistoryIds, issueState);
-    }
-
     public IssueHistory() {
+    }
+
+    public IssueHistory(String issueState, String createdTime, Issue issue) {
+        this.issueState = issueState;
+        this.createdTime = createdTime;
+        this.issue = issue;
     }
 
     public IssueHistory(String issueState, Issue issue) {
@@ -41,20 +38,28 @@ public class IssueHistory implements Serializable {
         this.issue = issue;
     }
 
-    public Issue getId() {
-        return issue;
+    public String getCreatedTime() {
+        return createdTime;
     }
 
-    public void setId(Issue issue) {
+    public void setCreatedTime(String createdTime) {
+        this.createdTime = createdTime;
+    }
+
+    public void setIssue(Issue issue) {
         this.issue = issue;
     }
 
-    public IssueHistoryIds getIssueHistoryIds() {
-        return issueHistoryIds;
+    public Issue getIssue() {
+        return issue;
     }
 
-    public void setIssueHistoryIds(IssueHistoryIds issueHistoryIds) {
-        this.issueHistoryIds = issueHistoryIds;
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
     }
 
     public String getIssueState() {
