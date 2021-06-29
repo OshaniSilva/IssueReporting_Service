@@ -34,7 +34,7 @@ public class IssueHistoryController {
      *  RequestHeader: Includes auth token for checking user validity
      *  PathVariable: Issue id is sent */
     @GetMapping(value = "/issue/{issueId}")
-    public ResponseEntity<List<IssueHistory>> getHistoryOfIssue(@RequestHeader("Authorization") String token, @PathVariable long issueId) throws JSONException, IOException, InterruptedException {
+    public ResponseEntity<Object> getHistoryOfIssue(@RequestHeader("Authorization") String token, @PathVariable long issueId) {
 
         try {
             // Token is sent to AuthController to be verified
@@ -52,33 +52,29 @@ public class IssueHistoryController {
                         historyDataByIssue.add(issueHistory);
                     }
                 }
-            //return historyDataByIssue;
+                //return historyDataByIssue;
                 return new ResponseEntity<>(historyDataByIssue, HttpStatus.OK);
             } else {
                 String errorMsg = "Invalid token";
                 log.info(errorMsg);
-                return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
+                return new ResponseEntity<>(errorMsg, HttpStatus.UNAUTHORIZED);
             }
         } catch (IOException ioException) {
             String errorMsg = "IOException in getting all issues: " + ioException;
             log.info(errorMsg);
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (InterruptedException interruptedException) {
             String errorMsg = "InterruptedException in getting all issues: " + interruptedException;
             log.info(errorMsg);
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (JSONException jsonException) {
             String errorMsg = "Invalid json error in getting all issues: " + jsonException;
             log.info(errorMsg);
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (NullPointerException nullPointerException) {
             String errorMsg = "Null pointer : " + nullPointerException;
             log.info(errorMsg);
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
-        } catch (Exception exception) {
-            String errorMsg = "Exception in get issues: " + exception;
-            log.info(errorMsg);
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

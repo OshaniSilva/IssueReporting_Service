@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,30 +25,50 @@ public class UserController {
     @Autowired
     UserRepository userRepository;
 
+    /*  This endpoint is called to create new users
+     *  RequestHeader: Includes auth token for checking user validity
+     *  RequestBody: User object is sent here  */
     @PostMapping("/create")
-    public ResponseEntity<User> loginUser(@RequestHeader("Authorization") String token, @RequestBody User user) throws IOException, InterruptedException, JSONException {
+    public ResponseEntity<Object> loginUser(@RequestHeader("Authorization") String token, @RequestBody User user) {
 
         try {
             // Token is sent to AuthController to be verified
             JSONObject verifiedAuthObject = new JSONObject(AuthController.verifyToken(token));
 
+            // If token is valid client is given access create a new user
             if (!verifiedAuthObject.has("error")) {
-                System.out.println("INSISEEE USER");
                 User _user = userRepository
                         .save(new User(user.getUserId(), user.getUsername()));
                 return new ResponseEntity<>(_user, HttpStatus.CREATED);
             } else {
                 String errorMsg = "Invalid token";
                 log.info(errorMsg);
-                return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
+                return new ResponseEntity<>(errorMsg, HttpStatus.UNAUTHORIZED);
             }
-        } catch (Exception exception) {
-            String errorMsg = "Exception in get issues: " + exception;
+        } catch (IOException ioException) {
+            String errorMsg = "IOException in creating user: " + ioException;
             log.info(errorMsg);
-            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException interruptedException) {
+            String errorMsg = "InterruptedException in creating user: " + interruptedException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (JSONException jsonException) {
+            String errorMsg = "Invalid json error in creating user: " + jsonException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (NullPointerException nullPointerException) {
+            String errorMsg = "Null pointer in creating user: " + nullPointerException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception exception) {
+            String errorMsg = "Exception in creating user: " + exception;
+            log.info(errorMsg);
+            return new ResponseEntity<>(errorMsg, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
+    //  This endpoint is called to get all users
     @GetMapping("/getUsers")
     public ResponseEntity<List<User>> getAllUsers() {
         try {
