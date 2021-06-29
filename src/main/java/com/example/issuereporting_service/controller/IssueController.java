@@ -10,6 +10,8 @@ import com.example.issuereporting_service.repository.IssueRepository;
 import com.example.issuereporting_service.repository.UserRepository;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +29,8 @@ import java.util.Optional;
 @RequestMapping ("/issue")
 public class IssueController {
 
+    static final Logger log = LoggerFactory.getLogger(AuthController.class);
+
     @Autowired
     IssueRepository issueRepository;
 
@@ -36,227 +40,342 @@ public class IssueController {
     @Autowired
     UserRepository userRepository;
 
-//    @Autowired
-//    StateRepository stateRepository;
-
+    /* This endpoint is called when issue creation is done by user
+    *  RequestHeader: Includes auth token for checking user validity
+    *  RequestBody: Issue details are included  */
     @PostMapping("/create")
-    public Object cretaeIssue (@RequestHeader("Authorization") String token, @RequestBody Issue issue) throws IOException, InterruptedException, JSONException {
+    public ResponseEntity<Issue> cretaeIssue (@RequestHeader("Authorization") String token, @RequestBody Issue issue) throws IOException, InterruptedException, JSONException {
+        try {
 
-        System.out.println("ISSUEEE");
-        System.out.println(issue);
+            // Token is sent to AuthController to be verified
+            JSONObject verifiedAuthObject = new JSONObject(AuthController.verifyToken(token));
 
-        JSONObject jsonObject = new JSONObject(AuthController.verifyToken(token));
+            // If token is valid client is given access for issue creation
+            if (!verifiedAuthObject.has("error")) {
 
-        if (!jsonObject.has("error")) {
+                // Issue creation time
+                DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+                LocalDateTime presentTime = LocalDateTime.now();
 
-            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-            LocalDateTime now = LocalDateTime.now();
+                // If user is not in db new user is created in user table
+                findUserInDB(verifiedAuthObject);
 
-            verifyUser(jsonObject);
-            System.out.println("FIRST IFFF");
+                // User object is created with current user information for mapping issue to user table
+                User user = new User(verifiedAuthObject.getString("email"), verifiedAuthObject.getString("given_name"));
 
-            User user = new User(jsonObject.getString("email"), jsonObject.getString("given_name"));
+                // New issue is saved in db
+                Issue _newIssue = issueRepository
+                        .save(new Issue(issue.getIssueType(), issue.getIssueDescription(), "Open", dtf.format(presentTime), user));
+                issueHistoryRepository.save(new IssueHistory("Open",dtf.format(presentTime), _newIssue ));
 
-            Issue _newIssue = issueRepository
-                .save(new Issue(issue.getIssueType(), issue.getIssueDescription(), "Open",
-                        dtf.format(now), user));
-
-            System.out.println("isuuuuuuuuu");
-            System.out.println(_newIssue);
-
-            issueHistoryRepository.save(new IssueHistory("Open",dtf.format(now), _newIssue ));
-
-            return _newIssue;
-//            for (User user: allUsers) {
-//                if (user.getUserId() == jsonObject.getString("email")) {
-//                    issueRepository.save(new Issue(issue.getIssueType(), issue.getIssueDescription(), issue.getIssueState(),
-//                            null, new User("osh.silva@gmail.com", "Oshani ")));
-//                } else {
-////                    userRepository.save(new User(user.getUserId(), user.getUsername()));
-//                    issueRepository.save(new Issue(1, issue.getIssueType(), issue.getIssueDescription(),
-//                                    issue.getIssueState(), null, new User("osh.silva@gmail.com", "Oshani ")));
-//                }
-//            }
-        } else {
-            System.out.println("---Invalid token-----");
-            return "Invalid token";
+                return new ResponseEntity<>(_newIssue, HttpStatus.OK);
+                //return _newIssue;
+            } else {
+                String errorMsg = "Invalid token";
+                log.info(errorMsg);
+                return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
+            }
+        } catch (IOException ioException) {
+            String errorMsg = "IOException in issue creation: " + ioException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException interruptedException) {
+            String errorMsg = "InterruptedException in issue creation: " + interruptedException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (JSONException jsonException) {
+            String errorMsg = "Invalid json error: " + jsonException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (NullPointerException nullPointerException) {
+            String errorMsg = "Null pointer: " + nullPointerException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception exception) {
+            String errorMsg = "Exception in issue creation: " + exception;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
+    /*  This endpoint is called when user edits an issue
+     *  RequestHeader: Includes auth token for checking user validity
+     *  PathVariable: Issue id is sent
+     *  RequestBody: Updated issue details are included  */
     @PutMapping("/edit/{id}")
     public ResponseEntity<Issue> updateIssue(@RequestHeader("Authorization") String token, @PathVariable("id") long id, @RequestBody Issue issue) throws JSONException, IOException, InterruptedException {
 
-        System.out.println("edittttttttttttttttttttt");
-        JSONObject jsonObject = new JSONObject(AuthController.verifyToken(token));
+        try {
 
-        verifyUser(jsonObject);
+            // Token is sent to AuthController to be verified
+            JSONObject verifiedAuthObject = new JSONObject(AuthController.verifyToken(token));
 
-        if (!jsonObject.has("error")) {
+            // If user is not in db new user is created in user table
+            findUserInDB(verifiedAuthObject);
 
-            DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
-            LocalDateTime now = LocalDateTime.now();
+            // If token is valid client is given access to update issue
+            if (!verifiedAuthObject.has("error")) {
 
-            Optional<Issue> issueData = issueRepository.findById(id);
+                // Issue updated time
+                DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
+                LocalDateTime presentTime = LocalDateTime.now();
 
-            if (issueData.isPresent()) {
-                Issue _issue = issueData.get();
+                // Relevant issue is queried for in the db
+                Optional<Issue> issueData = issueRepository.findById(id);
 
-                System.out.println("--------_issue------------");
-                System.out.println(_issue.getIssueState());
-                System.out.println("========issue=============");
-                System.out.println(issue.getIssueState());
-                if (!_issue.getIssueState().equals(issue.getIssueState())) {
-                    System.out.println("INSIDE IDD");
-                    _issue.setIssueState(issue.getIssueState());
-                    issueHistoryRepository.save(new IssueHistory(issue.getIssueState(),dtf.format(now), _issue ));
-                    issueRepository.save(_issue);
+                // If issue is available user update is done
+                if (issueData.isPresent()) {
+
+                    // If user updated state is not the same as previous state in db the issue state is updated
+                    Issue _issue = issueData.get();
+
+                    // If token is valid client is given access to update issue
+                    if (!_issue.getIssueState().equals(issue.getIssueState())) {
+
+                        _issue.setIssueState(issue.getIssueState());
+
+                        // A new record is inserted into the issueHistory table with the updated time
+                        issueHistoryRepository.save(new IssueHistory(issue.getIssueState(),dtf.format(presentTime), _issue ));
+
+                        // The state is updated in relavant issue
+                        issueRepository.save(_issue);
+                    }
+                    return new ResponseEntity<>(_issue, HttpStatus.OK);
+                } else {
+                    return new ResponseEntity<>(HttpStatus.NOT_FOUND);
                 }
-                return new ResponseEntity<>(_issue, HttpStatus.OK);
             } else {
-                return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+                String errorMsg = "Invalid token";
+                log.info(errorMsg);
+                return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
             }
-        } else {
-            System.out.println("invalid token");
-            return null;
+        } catch (IOException ioException) {
+            String errorMsg = "IOException in issue update: " + ioException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException interruptedException) {
+            String errorMsg = "InterruptedException in issue update: " + interruptedException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (JSONException jsonException) {
+            String errorMsg = "Invalid json error in issue update: " + jsonException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (NullPointerException nullPointerException) {
+            String errorMsg = "Null pointer : " + nullPointerException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception exception) {
+            String errorMsg = "Exception in issue update: " + exception;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
+
     }
 
-
+    /*  This endpoint is called for getting all issue
+     *  RequestHeader: Includes auth token for checking user validity  */
     @GetMapping("/getAllIssues")
-    public List<Issue>  getAllIssues (@RequestHeader("Authorization") String token) throws IOException, InterruptedException, JSONException {
+    public ResponseEntity<List<Issue>>  getAllIssues (@RequestHeader("Authorization") String token) throws IOException, InterruptedException, JSONException {
+        try {
+            System.out.println("hereee");
 
-        System.out.println("ISSUEEE");
-        System.out.println(token);
+            // Token is sent to AuthController to be verified
+            JSONObject verifiedAuthObject = new JSONObject(AuthController.verifyToken(token));
 
-        JSONObject jsonObject = new JSONObject(AuthController.verifyToken(token));
+            // If user is not in db new user is created in user table
+            findUserInDB(verifiedAuthObject);
 
-        verifyUser(jsonObject);
+            System.out.println("get all isuesss");
 
-        System.out.println("------1------");
-
-        if (!jsonObject.has("error")) {
-            System.out.println("------2------");
-            List<Issue> allIssues = issueRepository.findAll();
-            System.out.println("------3------ ");
-            System.out.println(allIssues);
-//            JSONArray allIssuesJson = new JSONArray(allIssues);
-//            JSONObject obj = new JSONObject();
-
-//            String json = new Gson().toJson(allIssues );
-            return issueRepository.findAll();
-        } else {
-            System.out.println("---Invalid token-----");
-            return null;
+            // If token is valid client is given access to get all issues
+            if (!verifiedAuthObject.has("error")) {
+                return new ResponseEntity<>(issueRepository.findAll(), HttpStatus.OK);
+            } else {
+                String errorMsg = "Invalid token";
+                log.info(errorMsg);
+                return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
+            }
+        } catch (IOException ioException) {
+            String errorMsg = "IOException in getting all issues: " + ioException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException interruptedException) {
+            String errorMsg = "InterruptedException in getting all issues: " + interruptedException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (JSONException jsonException) {
+            String errorMsg = "Invalid json error in getting all issues: " + jsonException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (NullPointerException nullPointerException) {
+            String errorMsg = "Null pointer : " + nullPointerException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception exception) {
+            String errorMsg = "Exception in get issues: " + exception;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
+    /*  This endpoint is called to get issue percentages
+     *  RequestHeader: Includes auth token for checking user validity */
     @GetMapping("/getStatusPercentage")
-    public List<State> getStateData (@RequestHeader("Authorization") String token) throws IOException, InterruptedException, JSONException {
+    public ResponseEntity<List<State>> getStateData (@RequestHeader("Authorization") String token) throws IOException, InterruptedException, JSONException {
 
-        System.out.println("getStateData");
-        System.out.println(token);
-        int openCount = 0;
-        int waitingCount = 0;
-        int progressCount = 0;
-        int resolvedCount = 0;
-        double openState, waitingState, progressState, resolvedState = 0;
+        // Issue state percentages are calculated here
+        try {
 
-        JSONObject jsonObject = new JSONObject(AuthController.verifyToken(token));
-        verifyUser(jsonObject);
+            int openCount = 0;
+            int waitingCount = 0;
+            int progressCount = 0;
+            int resolvedCount = 0;
+            double openState, waitingState, progressState, resolvedState = 0;
 
-        if (!jsonObject.has("error")) {
+            // Token is sent to AuthController to be verified
+            JSONObject verifiedAuthObject = new JSONObject(AuthController.verifyToken(token));
 
-            List<Issue> allIssues = issueRepository.findAll();
-            System.out.println(allIssues);
+            // If user is not in db new user is created in user table
+            findUserInDB(verifiedAuthObject);
 
-            for (Issue issue: allIssues) {
-                if (issue.getIssueState().equals("Open")) {
-                    ++openCount;
-                } else if (issue.getIssueState().equals("Waiting")) {
-                    ++waitingCount;
-                } else if (issue.getIssueState().equals("Progress")) {
-                    ++progressCount;
-                } else if (issue.getIssueState().equals("Resolved")) {
-                    ++resolvedCount;
+            // If token is valid client is given access to get issue percentages
+            if (!verifiedAuthObject.has("error")) {
+
+                List<Issue> allIssues = issueRepository.findAll();
+
+                // Count of issue state are taken
+                for (Issue issue: allIssues) {
+                    if (issue.getIssueState().equals("Open")) {
+                        ++openCount;
+                    } else if (issue.getIssueState().equals("Waiting")) {
+                        ++waitingCount;
+                    } else if (issue.getIssueState().equals("Progress")) {
+                        ++progressCount;
+                    } else if (issue.getIssueState().equals("Resolved")) {
+                        ++resolvedCount;
+                    }
                 }
+
+                // Percentages calculated
+                openState = (openCount*100)/allIssues.size();
+                waitingState = (waitingCount*100)/allIssues.size();
+                progressState = (progressCount*100)/allIssues.size();
+                resolvedState = (resolvedCount*100)/allIssues.size();
+
+                List<State> newStates = new ArrayList<>();
+                newStates.add(new State(openState,"Open"));
+                newStates.add(new State(waitingState,"Waiting"));
+                newStates.add(new State(progressState, "Progress"));
+                newStates.add(new State(resolvedState, "Resolved"));
+
+                //  return newStates;
+                return new ResponseEntity<>(newStates, HttpStatus.OK);
+            } else {
+                String errorMsg = "Invalid token";
+                log.info(errorMsg);
+                return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
             }
-
-            openState = (openCount*100)/allIssues.size();
-            waitingState = (waitingCount*100)/allIssues.size();
-            progressState = (progressCount*100)/allIssues.size();
-            resolvedState = (resolvedCount*100)/allIssues.size();
-
-            List<State> newStates = new ArrayList<>();
-            newStates.add(new State(openState,"Open"));
-            newStates.add(new State(waitingState,"Waiting"));
-            newStates.add(new State(progressState, "Progress"));
-            newStates.add(new State(resolvedState, "Resolved"));
-
-//           stateRepository.save(new State(openState,waitingState,progressState,resolvedState));
-
-//            JSONObject obj = new JSONObject();
-//
-//            obj.put("Open", openState);
-//            obj.put("Waiting", waitingState);
-//            obj.put("Progress", progressState);
-//            obj.put("Resolved", resolvedState);
-//
-//            System.out.println("==================== "+obj);
-//
-//            System.out.println(openState);
-//            System.out.println(waitingState);
-//            System.out.println(progressState);
-//            System.out.println(resolvedState);
-
-            return newStates;
-        } else {
-            System.out.println("---Invalid token-----");
-            return null;
+        } catch (IOException ioException) {
+            String errorMsg = "IOException in getting all issues: " + ioException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException interruptedException) {
+            String errorMsg = "InterruptedException in getting all issues: " + interruptedException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (JSONException jsonException) {
+            String errorMsg = "Invalid json error in getting all issues: " + jsonException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (NullPointerException nullPointerException) {
+            String errorMsg = "Null pointer : " + nullPointerException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception exception) {
+            String errorMsg = "Exception in get issues: " + exception;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
-
     }
 
+    /*  This endpoint is called to get issue list of a particular state
+     *  RequestHeader: Includes auth token for checking user validity
+     *  PathVariable: state is sent here  */
     @GetMapping(value = "/getIssuesOfState/{issueState}")
-    public List<Issue> getAllIssuesOfState(@RequestHeader("Authorization") String token, @PathVariable String issueState) throws JSONException, IOException, InterruptedException {
+    public ResponseEntity<List<Issue>> getAllIssuesOfState(@RequestHeader("Authorization") String token, @PathVariable String issueState) throws JSONException, IOException, InterruptedException {
 
-        JSONObject jsonObject = new JSONObject(AuthController.verifyToken(token));
-        verifyUser(jsonObject);
+        try {
 
-        if (!jsonObject.has("error")) {
-            List<Issue> issueData = issueRepository.findAll();
-            List<Issue> issueDataByState = new ArrayList<Issue>();
-            for(Issue issue : issueData) {
-                if (issue.getIssueState().equals(issueState) ) {
-                    issueDataByState.add(issue);
+            // Token is sent to AuthController to be verified
+            JSONObject verifiedAuthObject = new JSONObject(AuthController.verifyToken(token));
+
+            // If user is not in db new user is created in user table
+            findUserInDB(verifiedAuthObject);
+
+            // If token is valid client is given access to get issue list by state
+            if (!verifiedAuthObject.has("error")) {
+                List<Issue> issueData = issueRepository.findAll();
+                List<Issue> issueDataByState = new ArrayList<Issue>();
+                for(Issue issue : issueData) {
+                    if (issue.getIssueState().equals(issueState) ) {
+                        issueDataByState.add(issue);
+                    }
                 }
+                //return issueDataByState;
+                return new ResponseEntity<>(issueDataByState, HttpStatus.OK);
+            } else {
+                String errorMsg = "Invalid token";
+                log.info(errorMsg);
+                return new ResponseEntity<>(null, HttpStatus.UNAUTHORIZED);
             }
-            return issueDataByState;
-        } else {
-            System.out.println("invalid token");
-            return null;
+        } catch (IOException ioException) {
+            String errorMsg = "IOException in getting all issues: " + ioException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (InterruptedException interruptedException) {
+            String errorMsg = "InterruptedException in getting all issues: " + interruptedException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (JSONException jsonException) {
+            String errorMsg = "Invalid json error in getting all issues: " + jsonException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (NullPointerException nullPointerException) {
+            String errorMsg = "Null pointer : " + nullPointerException;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
+        } catch (Exception exception) {
+            String errorMsg = "Exception in get issues: " + exception;
+            log.info(errorMsg);
+            return new ResponseEntity<>(null, HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    public void verifyUser(JSONObject tokenVerification) throws JSONException {
+    // This method is used to register new users in the db
+    public void findUserInDB(JSONObject tokenVerification) throws JSONException {
 
-//        JSONObject jsonObject = new JSONObject(tokenVerification);
-        List<User> allUsers = userRepository.findAll();
-        Boolean haveUser = false;
+        try {
+            List<User> allUsers = userRepository.findAll();
+            Boolean haveUser = false;
 
-        if (!tokenVerification.has("error")) {
-            for (User user: allUsers) {
-                System.out.println("-----");
-                System.out.println(tokenVerification.getString("email"));
-                System.out.println(user.getUserId());
-                if (user.getUserId().equals(tokenVerification.getString("email"))) {
-                    System.out.println("---user in db-----");
-                    haveUser = true;
+            // If token is valid new users are saved
+            if (!tokenVerification.has("error")) {
+                for (User user: allUsers) {
+                    if (user.getUserId().equals(tokenVerification.getString("email"))) {
+                        haveUser = true;
+                    }
+                }
+                if (haveUser == false) {
+                    userRepository.save(new User(tokenVerification.getString("email"), tokenVerification.getString("given_name")));
                 }
             }
-            if (haveUser == false) {
-                System.out.println("---created new user-----");
-                userRepository.save(new User(tokenVerification.getString("email"), tokenVerification.getString("given_name")));
-            }
+        } catch (JSONException jsonException) {
+            String errorMsg = "Invalid json error in saving new user: " + jsonException;
+            log.info(errorMsg);
+        } catch (Exception exception) {
+            String errorMsg = "Exception in saving new user: " + exception;
+            log.info(errorMsg);
         }
     }
 }

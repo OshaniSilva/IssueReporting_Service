@@ -26,20 +26,16 @@ public class Issue implements Serializable {
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "user_id")
     public User testUser;
-//    String userId;
-//    public User user;
 
     @OneToMany(mappedBy = "issue", fetch = FetchType.LAZY,
             cascade = CascadeType.ALL)
     private List<IssueHistory> issueHistories;
 
-//    User _user = (new User(user.getUserId(), user.getUsername()));
 
     public Issue() {
     }
 
     public Issue( String issueType, String issueDescription, String issueState, String createdTime, User user) {
-//        this.id = id;
         this.issueType = issueType;
         this.issueDescription = issueDescription;
         this.issueState = issueState;
@@ -96,14 +92,6 @@ public class Issue implements Serializable {
     public void setCreatedTime(String createdTime) {
         this.createdTime = createdTime;
     }
-
-//    public User getUserId() {
-//        return testUser;
-//    }
-//
-//    public void setUserId(User user) {
-//        this.testUser = user;
-//    }
 
     @Override
     public String toString() {

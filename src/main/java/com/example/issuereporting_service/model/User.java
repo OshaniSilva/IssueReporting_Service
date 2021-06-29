@@ -12,7 +12,7 @@ public class User implements Serializable {
     @Id
     @Column(name = "user_id")
     private String userId;
-//    @GeneratedValue(strategy = GenerationType.AUTO)
+//   @GeneratedValue(strategy = GenerationType.AUTO)
 
     @Column(name = "username")
     private String username;
